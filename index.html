@@ -146,23 +146,40 @@
             background: #218838;
         }
         .waitlist-btn[data-status="remove"] {
-            background: #dc3545;
+            background: #8B0000;
         }
         .waitlist-btn[data-status="remove"]:hover {
-            background: #c82333;
+            background: #A52A2A;
         }
-        .waitlist-btn .tooltip {
-            position: absolute;
-            background: rgba(0, 0, 0, 0.8);
-            color: white;
-            padding: 5px 10px;
+        .info-icon {
+            margin-left: 8px;
+            color: #6c757d;
+            cursor: help;
+            position: relative;
+            display: inline-block;
+        }
+        .info-icon:hover {
+            color: #495057;
+        }
+        .tooltip {
+            position: fixed;
+            background: white;
+            color: #333;
+            padding: 10px;
             border-radius: 4px;
             font-size: 12px;
             display: none;
             z-index: 1000;
-            white-space: nowrap;
+            width: 200px;
+            max-width: 80vw;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            border: 1px solid #ddd;
+            line-height: 1.4;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
         }
-        .waitlist-btn:hover .tooltip {
+        .info-icon:hover .tooltip {
             display: block;
         }
         .waitlist-queue {
@@ -222,6 +239,38 @@
         let debounceTimer;
         let movies = [];
         let waitlistQueue = [];
+
+        // Cookie functions
+        function saveQueueToCookie() {
+            const queueData = JSON.stringify(waitlistQueue);
+            const cookieValue = `waitlistQueue=${encodeURIComponent(queueData)}`;
+            const cookieOptions = [
+                'path=/',
+                'max-age=31536000',  // 1 year
+                'SameSite=Strict'
+            ];
+            document.cookie = cookieValue + ';' + cookieOptions.join(';');
+            console.log('Saved queue to cookie:', queueData);
+            console.log('Current cookies:', document.cookie);
+        }
+
+        function loadQueueFromCookie() {
+            console.log('Loading queue from cookies. All cookies:', document.cookie);
+            const cookies = document.cookie.split(';');
+            const queueCookie = cookies.find(cookie => cookie.trim().startsWith('waitlistQueue='));
+            console.log('Found queue cookie:', queueCookie);
+            
+            if (queueCookie) {
+                try {
+                    const queueData = decodeURIComponent(queueCookie.split('=')[1]);
+                    console.log('Parsed queue data:', queueData);
+                    waitlistQueue = JSON.parse(queueData);
+                    updateWaitlistQueue();
+                } catch (error) {
+                    console.error('Error loading queue from cookie:', error);
+                }
+            }
+        }
 
         async function fetchAllMovies() {
             try {
@@ -395,9 +444,9 @@
                                             data-status="${isInWaitlist(movie.title, s.datetime) ? 'remove' : 'add'}"
                                         >
                                             ${isInWaitlist(movie.title, s.datetime) 
-                                                ? '- Remove from my waitlist queue' 
-                                                : '+ Waitlist for me'}
-                                            <span class="tooltip">Wait4Me will waitlist for this movie as soon as the waitlist becomes available</span>
+                                ? '- Remove from my waitlist queue' 
+                                : '+ Waitlist for me'}
+                            <span class="info-icon">ⓘ<span class="tooltip">Wait4Me will waitlist for this movie as soon as the waitlist becomes available</span></span>
                                         </button>
                                     </div>
                                 `).join('')
@@ -426,12 +475,10 @@
             const datetime = screening.datetime;
             
             if (isInWaitlist(movie.title, datetime)) {
-                // Remove from queue
                 waitlistQueue = waitlistQueue.filter(item => 
                     !(item.title === movie.title && item.datetime === datetime)
                 );
             } else {
-                // Add to queue
                 waitlistQueue.push({
                     title: movie.title,
                     datetime: datetime,
@@ -439,19 +486,20 @@
                     status: screening.status
                 });
                 
-                // Sort queue chronologically
                 waitlistQueue.sort((a, b) => 
                     parseDateTime(a.datetime) - parseDateTime(b.datetime)
                 );
             }
             
-            // Update button state
+            // Save to cookie after modifying queue
+            saveQueueToCookie();
+            
             const btn = event.target.closest('.waitlist-btn');
             const isRemove = isInWaitlist(movie.title, datetime);
             btn.dataset.status = isRemove ? 'remove' : 'add';
             btn.innerHTML = `
                 ${isRemove ? '- Remove from my waitlist queue' : '+ Waitlist for me'}
-                <span class="tooltip">Wait4Me will waitlist for this movie as soon as the waitlist becomes available</span>
+                <span class="info-icon">ⓘ<span class="tooltip">Wait4Me will waitlist for this movie as soon as the waitlist becomes available</span></span>
             `;
             
             updateWaitlistQueue();
@@ -467,22 +515,31 @@
             }
             
             queueDiv.style.display = 'block';
-            queueItems.innerHTML = waitlistQueue.map(item => `
-                <div class="queue-item">
-                    <div>
-                        <strong>${item.title}</strong>
-                        <p>Date: ${formatDateTime(parseDateTime(item.datetime))}</p>
-                        <p>Type: ${item.type}</p>
+            queueItems.innerHTML = waitlistQueue.map(item => {
+                // Find the full movie object to get the image and location
+                const movie = movies.find(m => m.title === item.title);
+                const screening = movie?.screenings?.find(s => s.datetime === item.datetime);
+                return `
+                    <div class="queue-item">
+                        <div style="display: flex; gap: 10px; align-items: start;">
+                            <img src="${movie?.posterImage || 'placeholder.jpg'}" alt="${item.title}" style="width: 50px; height: 70px; object-fit: cover; border-radius: 4px;">
+                            <div>
+                                <strong style="cursor: pointer;" onclick="showMovieDetails(${JSON.stringify(movie).replace(/"/g, '&quot;')})">${item.title}</strong>
+                                <p>Date: ${formatDateTime(parseDateTime(item.datetime))}</p>
+                                <p>Type: ${item.type}</p>
+                                ${screening?.location ? `<p>Location: ${screening.location}</p>` : ''}
+                            </div>
+                        </div>
+                        <button 
+                            class="waitlist-btn" 
+                            data-status="remove"
+                            onclick="removeFromQueue('${item.title}', '${item.datetime}')"
+                        >
+                            - Remove
+                        </button>
                     </div>
-                    <button 
-                        class="waitlist-btn" 
-                        data-status="remove"
-                        onclick="removeFromQueue('${item.title}', '${item.datetime}')"
-                    >
-                        - Remove
-                    </button>
-                </div>
-            `).join('');
+                `;
+            }).join('');
         }
 
         function removeFromQueue(title, datetime) {
@@ -490,8 +547,8 @@
                 !(item.title === title && item.datetime === datetime)
             );
             updateWaitlistQueue();
+            saveQueueToCookie();
             
-            // Update any visible screening buttons
             const screeningDivs = document.querySelectorAll('.screening');
             screeningDivs.forEach(div => {
                 if (div.dataset.datetime === datetime) {
@@ -570,7 +627,10 @@
 
         // Initial setup
         setupEventListeners();
-        fetchMovies();
+        fetchMovies().then(() => {
+            // Load queue from cookie after movies are loaded
+            loadQueueFromCookie();
+        });
     </script>
 </body>
 </html>
