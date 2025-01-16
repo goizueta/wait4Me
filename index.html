@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wait4U - Sundance Film Waitlist</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .search-container {
+            text-align: center;
+            margin-top: 50px;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        #searchInput {
+            flex: 1;
+            padding: 10px;
+            font-size: 16px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .search-button {
+            padding: 10px 20px;
+            font-size: 16px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .search-button:hover {
+            background: #0056b3;
+        }
+        #searchResults {
+            width: 80%;
+            margin: 10px auto 0;
+            border: 1px solid #ddd;
+            border-top: none;
+            display: none;
+            position: absolute;
+            background: white;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            max-height: 300px;
+            overflow-y: auto;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .result-item {
+            padding: 10px;
+            cursor: pointer;
+            border-bottom: 1px solid #eee;
+            text-align: left;
+        }
+        .result-item:hover {
+            background-color: #f5f5f5;
+        }
+        .highlight {
+            font-weight: bold;
+            color: #007bff;
+        }
+        .back-button {
+            display: inline-block;
+            padding: 8px 16px;
+            background: #007bff;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+        .back-button:hover {
+            background: #0056b3;
+        }
+        .movie-details {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .search-results {
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 20px;
+        }
+        .movie-card {
+            cursor: pointer;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            text-align: center;
+            background: white;
+            transition: transform 0.2s;
+        }
+        .movie-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .movie-card img {
+            width: 100%;
+            height: 280px;
+            object-fit: cover;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+        .movie-card h3 {
+            margin: 0;
+            font-size: 1rem;
+            line-height: 1.4;
+        }
+        .screening {
+            margin: 10px 0;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background: #f8f9fa;
+        }
+        #loadingMessage, #errorMessage {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        #loadingMessage {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+        #errorMessage {
+            background: #ffebee;
+            color: #d32f2f;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="search-container">
+            <h2>What films would you like to waitlist?</h2>
+            <form id="searchForm" onsubmit="handleSearchSubmit(event)">
+                <div style="display: flex; gap: 10px; width: 80%; margin: 0 auto;">
+                    <input type="text" id="searchInput" placeholder="Search for movies...">
+                    <button type="submit" class="search-button">Search</button>
+                </div>
+            </form>
+            <div id="searchResults"></div>
+            <div id="loadingMessage">Loading movies...</div>
+            <div id="errorMessage"></div>
+        </div>
+    </div>
+
+    <script>
+        let debounceTimer;
+        let movies = [];
+
+        async function fetchAllMovies() {
+            try {
+                const response = await fetch('/movies.json');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                console.log('Fetched movies sample:', data.slice(0, 3));
+                return data;
+            } catch (error) {
+                console.error('Error fetching movies:', error);
+                throw error;
+            }
+        }
+
+        async function fetchMovies() {
+            const loadingMsg = document.getElementById('loadingMessage');
+            const errorMsg = document.getElementById('errorMessage');
+            const searchInput = document.getElementById('searchInput');
+            
+            try {
+                loadingMsg.style.display = 'block';
+                searchInput.disabled = true;
+                
+                movies = await fetchAllMovies();
+                window.movies = movies;
+                
+                loadingMsg.style.display = 'none';
+                searchInput.disabled = false;
+                console.log(`Loaded ${movies.length} movies`);
+            } catch (error) {
+                console.error('Error:', error);
+                errorMsg.textContent = 'Error loading movies. Please try refreshing the page.';
+                errorMsg.style.display = 'block';
+                loadingMsg.style.display = 'none';
+            }
+        }
+
+        function debounce(func, delay) {
+            return function() {
+                const context = this;
+                const args = arguments;
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(() => func.apply(context, args), delay);
+            }
+        }
+
+        function highlightText(text, query) {
+            if (!query) return text;
+            const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const regex = new RegExp(`(${escapedQuery})`, 'gi');
+            return text.replace(regex, '<span class="highlight">$1</span>');
+        }
+
+        function displayResults(results, query) {
+            const resultsDiv = document.getElementById('searchResults');
+            resultsDiv.innerHTML = '';
+            
+            if (results.length > 0) {
+                results.forEach(movie => {
+                    const div = document.createElement('div');
+                    div.className = 'result-item';
+                    div.innerHTML = highlightText(movie.title, query);
+                    div.onclick = () => showMovieDetails(movie);
+                    resultsDiv.appendChild(div);
+                });
+                resultsDiv.style.display = 'block';
+            } else {
+                resultsDiv.style.display = 'none';
+            }
+        }
+
+        function searchMovies(query) {
+            console.log('Searching movies with query:', query);
+            
+            if (query.length < 2) {
+                document.getElementById('searchResults').style.display = 'none';
+                return [];
+            }
+
+            const lowerQuery = query.toLowerCase();
+            const results = movies.filter(movie => 
+                movie.title.toLowerCase().includes(lowerQuery)
+            );
+            
+            console.log('Found matches:', results.length);
+            displayResults(results, query);
+            return results;
+        }
+
+        function showSearchResults(results) {
+            console.log('Showing search results page with', results.length, 'movies');
+            const resultsHTML = `
+                <div>
+                    <a href="#" class="back-button" onclick="navigateBack(event)">← Back to Search</a>
+                    <div class="search-results">
+                        <h2>Search Results</h2>
+                        ${results.length > 0 ? results.map(movie => `
+                            <div class="movie-card" onclick="showMovieDetails(${JSON.stringify(movie).replace(/"/g, '&quot;')})">
+                                <img src="${movie.posterImage || 'placeholder.jpg'}" alt="${movie.title}" loading="lazy">
+                                <h3>${movie.title}</h3>
+                            </div>
+                        `).join('') : '<p>No movies found matching your search.</p>'}
+                    </div>
+                </div>
+            `;
+            document.getElementById('app').innerHTML = resultsHTML;
+        }
+
+        function parseDateTime(dateTimeStr) {
+            // Format: "Jan 23, 5:00 P.M. MST"
+            const parts = dateTimeStr.split(', ');
+            const [month, day] = parts[0].split(' ');
+            const [time, period, timezone] = parts[1].split(' ');
+            const [hours, minutes] = time.split(':');
+            
+            // Convert to 24-hour format
+            let hour = parseInt(hours);
+            if (period === 'P.M.' && hour !== 12) {
+                hour += 12;
+            } else if (period === 'A.M.' && hour === 12) {
+                hour = 0;
+            }
+
+            // Get current year (since it's not provided in the datetime string)
+            const year = new Date().getFullYear();
+            
+            // Create date string in a format JavaScript can parse
+            const dateStr = `${month} ${day} ${year} ${hour}:${minutes} ${timezone}`;
+            return new Date(dateStr);
+        }
+
+        function formatDateTime(date) {
+            if (!date || isNaN(date)) return 'Date not available';
+            
+            const options = {
+                weekday: 'short',
+                month: 'short',
+                day: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit',
+                timeZoneName: 'short'
+            };
+            
+            return date.toLocaleString('en-US', options);
+        }
+
+        function showMovieDetails(movie) {
+            console.log('Showing details for movie:', movie.title);
+            const detailsHTML = `
+                <div>
+                    <a href="#" class="back-button" onclick="navigateBack(event)">← Back to Search</a>
+                    <div class="movie-details">
+                        <h1>${movie.title}</h1>
+                        <img src="${movie.posterImage || 'placeholder.jpg'}" alt="${movie.title}" style="max-width: 300px;">
+                        <p>${movie.description || 'No description available.'}</p>
+                        <h2>Screenings</h2>
+                        <div id="screenings">
+                            ${movie.screenings?.length > 0 
+                                ? movie.screenings.map(s => `
+                                    <div class="screening">
+                                        <p>Date: ${formatDateTime(parseDateTime(s.datetime))}</p>
+                                        <p>Type: ${s.type}</p>
+                                        <p>Status: ${s.status}</p>
+                                    </div>
+                                `).join('')
+                                : '<p>No screenings available.</p>'
+                            }
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('app').innerHTML = detailsHTML;
+        }
+
+        function navigateBack(event) {
+            event.preventDefault();
+            document.getElementById('app').innerHTML = `
+                <div class="search-container">
+                    <h2>What films would you like to waitlist?</h2>
+                    <form id="searchForm" onsubmit="handleSearchSubmit(event)">
+                        <div style="display: flex; gap: 10px; width: 80%; margin: 0 auto;">
+                            <input type="text" id="searchInput" placeholder="Search for movies...">
+                            <button type="submit" class="search-button">Search</button>
+                        </div>
+                    </form>
+                    <div id="searchResults"></div>
+                    <div id="loadingMessage" style="display: none;">Loading movies...</div>
+                    <div id="errorMessage"></div>
+                </div>
+            `;
+            setupEventListeners();
+        }
+
+        function handleSearchSubmit(event) {
+            console.log('Form submitted');
+            event.preventDefault();
+            const searchInput = document.getElementById('searchInput');
+            const query = searchInput.value.trim();
+            console.log('Search query:', query);
+            
+            if (query.length >= 2) {
+                const results = searchMovies(query);
+                console.log('Submitting search with results:', results.length);
+                showSearchResults(results);
+            }
+        }
+
+        function setupEventListeners() {
+            const searchForm = document.getElementById('searchForm');
+            const searchInput = document.getElementById('searchInput');
+            
+            if (searchForm) {
+                searchForm.onsubmit = handleSearchSubmit;
+            }
+
+            if (searchInput) {
+                searchInput.addEventListener('input', 
+                    debounce(e => searchMovies(e.target.value.trim()), 300)
+                );
+            }
+
+            document.addEventListener('click', (e) => {
+                const searchResults = document.getElementById('searchResults');
+                if (searchResults && !e.target.closest('.search-container')) {
+                    searchResults.style.display = 'none';
+                }
+            });
+        }
+
+        // Initial setup
+        setupEventListeners();
+        fetchMovies();
+    </script>
+</body>
+</html>
