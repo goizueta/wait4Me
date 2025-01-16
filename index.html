@@ -126,6 +126,61 @@
             border: 1px solid #ddd;
             border-radius: 4px;
             background: #f8f9fa;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .waitlist-btn {
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            border: none;
+            background: #28a745;
+            color: white;
+            transition: all 0.2s;
+        }
+        .waitlist-btn:hover {
+            background: #218838;
+        }
+        .waitlist-btn[data-status="remove"] {
+            background: #dc3545;
+        }
+        .waitlist-btn[data-status="remove"]:hover {
+            background: #c82333;
+        }
+        .waitlist-btn .tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            display: none;
+            z-index: 1000;
+            white-space: nowrap;
+        }
+        .waitlist-btn:hover .tooltip {
+            display: block;
+        }
+        .waitlist-queue {
+            margin-top: 20px;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .queue-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        .queue-item:last-child {
+            border-bottom: none;
         }
         #loadingMessage, #errorMessage {
             margin: 10px 0;
@@ -157,11 +212,16 @@
             <div id="loadingMessage">Loading movies...</div>
             <div id="errorMessage"></div>
         </div>
+        <div id="waitlistQueue" class="waitlist-queue" style="display: none;">
+            <h2>Waitlist Queue</h2>
+            <div id="queueItems"></div>
+        </div>
     </div>
 
     <script>
         let debounceTimer;
         let movies = [];
+        let waitlistQueue = [];
 
         async function fetchAllMovies() {
             try {
@@ -322,11 +382,23 @@
                         <h2>Screenings</h2>
                         <div id="screenings">
                             ${movie.screenings?.length > 0 
-                                ? movie.screenings.map(s => `
-                                    <div class="screening">
-                                        <p>Date: ${formatDateTime(parseDateTime(s.datetime))}</p>
-                                        <p>Type: ${s.type}</p>
-                                        <p>Status: ${s.status}</p>
+                                ? movie.screenings.map((s, index) => `
+                                    <div class="screening" data-datetime="${s.datetime}">
+                                        <div>
+                                            <p>Date: ${formatDateTime(parseDateTime(s.datetime))}</p>
+                                            <p>Type: ${s.type}</p>
+                                            <p>Status: ${s.status}</p>
+                                        </div>
+                                        <button 
+                                            class="waitlist-btn" 
+                                            onclick="toggleWaitlist(event, ${JSON.stringify(movie).replace(/"/g, '&quot;')}, ${index})"
+                                            data-status="${isInWaitlist(movie.title, s.datetime) ? 'remove' : 'add'}"
+                                        >
+                                            ${isInWaitlist(movie.title, s.datetime) 
+                                                ? '- Remove from my waitlist queue' 
+                                                : '+ Waitlist for me'}
+                                            <span class="tooltip">Wait4Me will waitlist for this movie as soon as the waitlist becomes available</span>
+                                        </button>
                                     </div>
                                 `).join('')
                                 : '<p>No screenings available.</p>'
@@ -334,9 +406,105 @@
                         </div>
                     </div>
                 </div>
+                <div id="waitlistQueue" class="waitlist-queue" style="display: none;">
+                    <h2>Waitlist Queue</h2>
+                    <div id="queueItems"></div>
+                </div>
             `;
             
             document.getElementById('app').innerHTML = detailsHTML;
+            updateWaitlistQueue();
+        }
+
+        function isInWaitlist(title, datetime) {
+            return waitlistQueue.some(item => item.title === title && item.datetime === datetime);
+        }
+
+        function toggleWaitlist(event, movie, screeningIndex) {
+            event.stopPropagation();
+            const screening = movie.screenings[screeningIndex];
+            const datetime = screening.datetime;
+            
+            if (isInWaitlist(movie.title, datetime)) {
+                // Remove from queue
+                waitlistQueue = waitlistQueue.filter(item => 
+                    !(item.title === movie.title && item.datetime === datetime)
+                );
+            } else {
+                // Add to queue
+                waitlistQueue.push({
+                    title: movie.title,
+                    datetime: datetime,
+                    type: screening.type,
+                    status: screening.status
+                });
+                
+                // Sort queue chronologically
+                waitlistQueue.sort((a, b) => 
+                    parseDateTime(a.datetime) - parseDateTime(b.datetime)
+                );
+            }
+            
+            // Update button state
+            const btn = event.target.closest('.waitlist-btn');
+            const isRemove = isInWaitlist(movie.title, datetime);
+            btn.dataset.status = isRemove ? 'remove' : 'add';
+            btn.innerHTML = `
+                ${isRemove ? '- Remove from my waitlist queue' : '+ Waitlist for me'}
+                <span class="tooltip">Wait4Me will waitlist for this movie as soon as the waitlist becomes available</span>
+            `;
+            
+            updateWaitlistQueue();
+        }
+
+        function updateWaitlistQueue() {
+            const queueDiv = document.getElementById('waitlistQueue');
+            const queueItems = document.getElementById('queueItems');
+            
+            if (waitlistQueue.length === 0) {
+                queueDiv.style.display = 'none';
+                return;
+            }
+            
+            queueDiv.style.display = 'block';
+            queueItems.innerHTML = waitlistQueue.map(item => `
+                <div class="queue-item">
+                    <div>
+                        <strong>${item.title}</strong>
+                        <p>Date: ${formatDateTime(parseDateTime(item.datetime))}</p>
+                        <p>Type: ${item.type}</p>
+                    </div>
+                    <button 
+                        class="waitlist-btn" 
+                        data-status="remove"
+                        onclick="removeFromQueue('${item.title}', '${item.datetime}')"
+                    >
+                        - Remove
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        function removeFromQueue(title, datetime) {
+            waitlistQueue = waitlistQueue.filter(item => 
+                !(item.title === title && item.datetime === datetime)
+            );
+            updateWaitlistQueue();
+            
+            // Update any visible screening buttons
+            const screeningDivs = document.querySelectorAll('.screening');
+            screeningDivs.forEach(div => {
+                if (div.dataset.datetime === datetime) {
+                    const btn = div.querySelector('.waitlist-btn');
+                    if (btn) {
+                        btn.dataset.status = 'add';
+                        btn.innerHTML = `
+                            + Waitlist for me
+                            <span class="tooltip">Wait4Me will waitlist for this movie as soon as the waitlist becomes available</span>
+                        `;
+                    }
+                }
+            });
         }
 
         function navigateBack(event) {
@@ -354,7 +522,13 @@
                     <div id="loadingMessage" style="display: none;">Loading movies...</div>
                     <div id="errorMessage"></div>
                 </div>
+                <div id="waitlistQueue" class="waitlist-queue" style="display: none;">
+                    <h2>Waitlist Queue</h2>
+                    <div id="queueItems"></div>
+                </div>
             `;
+            // Update the waitlist queue display after recreating the elements
+            updateWaitlistQueue();
             setupEventListeners();
         }
 
