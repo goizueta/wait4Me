@@ -382,26 +382,42 @@
         }
 
         function parseDateTime(dateTimeStr) {
-            // Format: "Jan 23, 5:00 P.M. MST"
-            const parts = dateTimeStr.split(', ');
-            const [month, day] = parts[0].split(' ');
-            const [time, period, timezone] = parts[1].split(' ');
-            const [hours, minutes] = time.split(':');
-            
-            // Convert to 24-hour format
-            let hour = parseInt(hours);
-            if (period === 'P.M.' && hour !== 12) {
-                hour += 12;
-            } else if (period === 'A.M.' && hour === 12) {
-                hour = 0;
-            }
+            try {
+                // Format: "Jan 23, 5:00 PM MST"
+                const [datePart, timePart] = dateTimeStr.split(', ');
+                const [month, day] = datePart.split(' ');
+                
+                // Split time part and clean up any extra spaces
+                const timeComponents = timePart.trim().split(/\s+/);
+                const [time, period, timezone] = timeComponents;
+                const [hours, minutes] = time.split(':');
+                
+                // Convert to 24-hour format
+                let hour = parseInt(hours);
+                if (period === 'PM' && hour !== 12) {
+                    hour += 12;
+                } else if (period === 'AM' && hour === 12) {
+                    hour = 0;
+                }
 
-            // Get current year (since it's not provided in the datetime string)
-            const year = new Date().getFullYear();
-            
-            // Create date string in a format JavaScript can parse
-            const dateStr = `${month} ${day} ${year} ${hour}:${minutes} ${timezone}`;
-            return new Date(dateStr);
+                // Get current year
+                const year = new Date().getFullYear();
+                
+                // Create a proper date string
+                const dateStr = `${month} ${day} ${year} ${hour}:${minutes} ${timezone}`;
+                const date = new Date(dateStr);
+                
+                // Verify the date is valid
+                if (isNaN(date.getTime())) {
+                    console.error('Invalid date created:', dateStr);
+                    return null;
+                }
+                
+                return date;
+            } catch (error) {
+                console.error('Error parsing date:', error, dateTimeStr);
+                return null;
+            }
         }
 
         function formatDateTime(date) {
@@ -435,8 +451,10 @@
                                     <div class="screening" data-datetime="${s.datetime}">
                                         <div>
                                             <p>Date: ${formatDateTime(parseDateTime(s.datetime))}</p>
+                                            <p>Venue: ${s.venue}</p>
+                                            <p>City: ${s.city}</p>
                                             <p>Type: ${s.type}</p>
-                                            <p>Status: ${s.status}</p>
+                                            ${s.hasOpenCaption ? '<p>Open Caption Available</p>' : ''}
                                         </div>
                                         <button 
                                             class="waitlist-btn" 
@@ -444,9 +462,9 @@
                                             data-status="${isInWaitlist(movie.title, s.datetime) ? 'remove' : 'add'}"
                                         >
                                             ${isInWaitlist(movie.title, s.datetime) 
-                                ? '- Remove from my waitlist queue' 
-                                : '+ Waitlist for me'}
-                            <span class="info-icon">ⓘ<span class="tooltip">Wait4Me will waitlist for this movie as soon as the waitlist becomes available</span></span>
+                                                ? '- Remove from my waitlist queue' 
+                                                : '+ Waitlist for me'}
+                                            <span class="info-icon">ⓘ<span class="tooltip">Wait4Me will waitlist for this movie as soon as the waitlist becomes available</span></span>
                                         </button>
                                     </div>
                                 `).join('')
@@ -483,7 +501,9 @@
                     title: movie.title,
                     datetime: datetime,
                     type: screening.type,
-                    status: screening.status
+                    venue: screening.venue,
+                    city: screening.city,
+                    hasOpenCaption: screening.hasOpenCaption
                 });
                 
                 waitlistQueue.sort((a, b) => 
@@ -516,9 +536,8 @@
             
             queueDiv.style.display = 'block';
             queueItems.innerHTML = waitlistQueue.map(item => {
-                // Find the full movie object to get the image and location
+                // Find the full movie object to get the image
                 const movie = movies.find(m => m.title === item.title);
-                const screening = movie?.screenings?.find(s => s.datetime === item.datetime);
                 return `
                     <div class="queue-item">
                         <div style="display: flex; gap: 10px; align-items: start;">
@@ -526,8 +545,10 @@
                             <div>
                                 <strong style="cursor: pointer;" onclick="showMovieDetails(${JSON.stringify(movie).replace(/"/g, '&quot;')})">${item.title}</strong>
                                 <p>Date: ${formatDateTime(parseDateTime(item.datetime))}</p>
+                                <p>Venue: ${item.venue}</p>
+                                <p>City: ${item.city}</p>
                                 <p>Type: ${item.type}</p>
-                                ${screening?.location ? `<p>Location: ${screening.location}</p>` : ''}
+                                ${item.hasOpenCaption ? '<p>Open Caption Available</p>' : ''}
                             </div>
                         </div>
                         <button 
@@ -557,7 +578,7 @@
                         btn.dataset.status = 'add';
                         btn.innerHTML = `
                             + Waitlist for me
-                            <span class="tooltip">Wait4Me will waitlist for this movie as soon as the waitlist becomes available</span>
+                            <span class="info-icon">ⓘ<span class="tooltip">Wait4Me will waitlist for this movie as soon as the waitlist becomes available</span></span>
                         `;
                     }
                 }
