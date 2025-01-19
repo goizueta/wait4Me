@@ -101,7 +101,6 @@ const showMovieDetails = movie => {
                                 <p>Date: ${formatDateTime(parseDateTime(s.datetime))}</p>
                                 <p>Venue: ${s.venue}</p>
                                 <p>City: ${s.city}</p>
-                                <p>Type: ${s.type}</p>
                                 ${s.hasOpenCaption ? '<p>Open Caption Available</p>' : ''}
                             </div>
                             <button 
@@ -137,7 +136,6 @@ const toggleWaitlist = (event, movie, screeningIndex) => {
         waitlistQueue.push({
             title: movie.title,
             datetime,
-            type: screening.type,
             venue: screening.venue,
             city: screening.city,
             hasOpenCaption: screening.hasOpenCaption
@@ -182,7 +180,6 @@ const updateWaitlistQueue = () => {
                         <p>Date: ${formatDateTime(parseDateTime(item.datetime))}</p>
                         <p>Venue: ${item.venue}</p>
                         <p>City: ${item.city}</p>
-                        <p>Type: ${item.type}</p>
                         ${item.hasOpenCaption ? '<p>Open Caption Available</p>' : ''}
                     </div>
                 </div>
@@ -271,7 +268,9 @@ const loadQueueFromCookie = () => {
     const queueCookie = document.cookie.split(';').find(c => c.trim().startsWith('waitlistQueue='));
     if (queueCookie) {
         try {
-            waitlistQueue = JSON.parse(decodeURIComponent(queueCookie.split('=')[1]));
+            // Remove type field from existing cookie data
+            const cookieData = JSON.parse(decodeURIComponent(queueCookie.split('=')[1]));
+            waitlistQueue = cookieData.map(({ type, ...rest }) => rest);
             updateWaitlistQueue();
         } catch (error) {
             console.error('Error loading queue from cookie:', error);

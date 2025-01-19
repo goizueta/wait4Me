@@ -453,7 +453,6 @@
                                             <p>Date: ${formatDateTime(parseDateTime(s.datetime))}</p>
                                             <p>Venue: ${s.venue}</p>
                                             <p>City: ${s.city}</p>
-                                            <p>Type: ${s.type}</p>
                                             ${s.hasOpenCaption ? '<p>Open Caption Available</p>' : ''}
                                         </div>
                                         <button 
@@ -500,7 +499,6 @@
                 waitlistQueue.push({
                     title: movie.title,
                     datetime: datetime,
-                    type: screening.type,
                     venue: screening.venue,
                     city: screening.city,
                     hasOpenCaption: screening.hasOpenCaption
@@ -547,7 +545,6 @@
                                 <p>Date: ${formatDateTime(parseDateTime(item.datetime))}</p>
                                 <p>Venue: ${item.venue}</p>
                                 <p>City: ${item.city}</p>
-                                <p>Type: ${item.type}</p>
                                 ${item.hasOpenCaption ? '<p>Open Caption Available</p>' : ''}
                             </div>
                         </div>
