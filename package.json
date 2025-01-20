@@ -1,0 +1,27 @@
+{
+  "name": "wait4uweb",
+  "version": "1.0.0",
+  "description": "Wait4U Web Application",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "jest",
+    "start": "http-server . -p 3001 --cors -c-1 -a localhost -P http://localhost:3001?"
+  },
+  "devDependencies": {
+    "@babel/preset-env": "^7.23.8",
+    "babel-jest": "^29.7.0",
+    "http-server": "^14.1.1",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0"
+  },
+  "jest": {
+    "testEnvironment": "jsdom",
+    "transform": {
+      "^.+\\.js$": "babel-jest"
+    }
+  },
+  "dependencies": {
+    "puppeteer": "^24.1.0"
+  }
+}
